@@ -3,12 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>IVR Simulator</title>
+  <title>Air India IVR Simulator</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #ivr-display { margin-bottom: 20px; font-size: 18px; min-height: 50px; }
+    #keypad button { width: 50px; height: 50px; margin: 5px; font-size: 18px; }
+    #start-btn { padding: 10px 20px; font-size: 18px; }
+  </style>
 </head>
 <body>
   <h2>Air India IVR Simulator</h2>
   <div id="ivr-display">Press Start to begin the call.</div>
   <button id="start-btn">Start Call</button>
+
   <div id="keypad" style="display:none;">
     <button class="dtmf">1</button>
     <button class="dtmf">2</button>
@@ -25,24 +32,67 @@
   </div>
 
   <script>
-    const API_BASE_URL = "http://127.0.0.1:8000";
+    const API_BASE_URL = "https://solitary-wand-x5q4rvjg47pqc9g65-8000.app.github.dev/.githubpreview.dev:8000";
 
+    let currentCallId = null;
+
+    // Start Call
     document.getElementById("start-btn").onclick = async () => {
-      const res = await fetch(`${API_BASE_URL}/ivr/start`);
-      const data = await res.json();
-      document.getElementById("ivr-display").innerText = data.message;
-      document.getElementById("keypad").style.display = "block";
-    };
+      const caller_number = prompt("Enter your phone number:");
+      if (!caller_number) return;
 
-    document.querySelectorAll(".dtmf").forEach(btn => {
-      btn.onclick = async () => {
-        const res = await fetch(`${API_BASE_URL}/ivr/dtmf`, {
+      try {
+        const res = await fetch(`${API_BASE_URL}/ivr/start`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ digit: btn.innerText })
+          body: JSON.stringify({ caller_number })
         });
+
         const data = await res.json();
-        document.getElementById("ivr-display").innerText = data.message;
+        console.log(data);
+
+        currentCallId = data.call_id;
+        document.getElementById("ivr-display").innerText = data.prompt;
+        document.getElementById("keypad").style.display = "block";
+      } catch (err) {
+        console.error(err);
+        alert("Failed to start call. Is backend running?");
+      }
+    };
+
+    // DTMF buttons
+    document.querySelectorAll(".dtmf").forEach(btn => {
+      btn.onclick = async () => {
+        if (!currentCallId) {
+          alert("Call not started!");
+          return;
+        }
+
+        try {
+          const res = await fetch(`${API_BASE_URL}/ivr/dtmf`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              call_id: currentCallId,
+              digit: btn.innerText
+            })
+          });
+
+          const data = await res.json();
+          console.log(data);
+
+          // Update display with prompt or message
+          document.getElementById("ivr-display").innerText = data.prompt || data.message;
+
+          // If call ended, hide keypad
+          if (["call_ended", "transferring", "pnr_found"].includes(data.status)) {
+            document.getElementById("keypad").style.display = "none";
+            currentCallId = null;
+          }
+        } catch (err) {
+          console.error(err);
+          alert("Error sending DTMF. Check backend logs.");
+        }
       };
     });
   </script>

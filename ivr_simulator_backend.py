@@ -28,7 +28,7 @@ class CallStart(BaseModel):
 class DTMFInput(BaseModel):
     call_id: str
     digit: str
-    current_menu: str
+
 
 class CallLog(BaseModel):
     call_id: str
