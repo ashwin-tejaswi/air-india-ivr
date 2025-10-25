@@ -1,47 +1,34 @@
-# air-india-ivr
-# Air India IVR Backend
+Air India IVR Simulator
+Project Overview
 
-## Overview
-This is the backend for the Air India Customer Support IVR project. 
-It acts as a middleware/API layer connecting calls to the conversational AI stack.  
-The backend is implemented using **FastAPI** and supports **Twilio integration** for handling calls and DTMF inputs.
+This is a simulated IVR (Interactive Voice Response) system for Air India Customer Support.
+It is built using FastAPI for the backend and a simple HTML/JS frontend to simulate calls.
+This simulator does not require Twilio or Azure Communication Services, and allows testing IVR flows directly in a browser.
 
----
+Features
 
-## Twilio Configuration 
+Start a simulated call by entering a phone number.
 
-```python
-TWILIO_ACCOUNT_SID = "xxxxxxxxxxxxx"  # Safe to include
-TWILIO_AUTH_TOKEN = "YOUR_AUTH_TOKEN"             # Placeholder, do not push real token
-TWILIO_PHONE_NUMBER =" +12196005841"             # Safe to include
+Navigate a menu using on-screen DTMF buttons.
 
+Handles main menu options:
 
-          +------------------+
-          | Caller / Customer|
-          +--------+---------+
-                   |
-                   v
-          +--------+---------+
-          |   Twilio Cloud   |
-          | (Handles Call)   |
-          +--------+---------+
-                   |
-          HTTP POST /twilio_ivr
-                   |
-                   v
-          +--------+---------+
-          | FastAPI Backend  |
-          | - /twilio_ivr    |
-          | - /twilio_process_choice
-          | - /handle-key
-          | - /ivr/step1, step2
-          +--------+---------+
-                   |
-         Flight info / Booking DB
-                   |
-                   v
-          +--------+---------+
-          | Backend Response |
-          | - TwiML Voice    |
-          +-----------------+
+Booking Enquiry
 
+Flight Status
+
+Transfer to Agent
+
+Collects 6-digit PNR and returns a mock flight status.
+
+Call session management with logs.
+
+Frontend communicates with backend via API.
+
+Files
+
+index.html – Frontend interface with keypad and call simulation.
+
+ivr_simulator_backend.py – FastAPI backend handling IVR logic and calls.
+
+README.md – Project overview and instructions.
