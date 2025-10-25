@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IVR Simulator</title>
+</head>
+<body>
+  <h2>Air India IVR Simulator</h2>
+  <div id="ivr-display">Press Start to begin the call.</div>
+  <button id="start-btn">Start Call</button>
+  <div id="keypad" style="display:none;">
+    <button class="dtmf">1</button>
+    <button class="dtmf">2</button>
+    <button class="dtmf">3</button><br>
+    <button class="dtmf">4</button>
+    <button class="dtmf">5</button>
+    <button class="dtmf">6</button><br>
+    <button class="dtmf">7</button>
+    <button class="dtmf">8</button>
+    <button class="dtmf">9</button><br>
+    <button class="dtmf">*</button>
+    <button class="dtmf">0</button>
+    <button class="dtmf">#</button>
+  </div>
+
+  <script>
+    const API_BASE_URL = "http://127.0.0.1:8000";
+
+    document.getElementById("start-btn").onclick = async () => {
+      const res = await fetch(`${API_BASE_URL}/ivr/start`);
+      const data = await res.json();
+      document.getElementById("ivr-display").innerText = data.message;
+      document.getElementById("keypad").style.display = "block";
+    };
+
+    document.querySelectorAll(".dtmf").forEach(btn => {
+      btn.onclick = async () => {
+        const res = await fetch(`${API_BASE_URL}/ivr/dtmf`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ digit: btn.innerText })
+        });
+        const data = await res.json();
+        document.getElementById("ivr-display").innerText = data.message;
+      };
+    });
+  </script>
+</body>
+</html>
