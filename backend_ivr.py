@@ -1,220 +1,225 @@
-# ======================================================
-# Air India Customer Support IVR Backend (FastAPI + Twilio)
-# ======================================================
+# ivr_simulator_backend.py
+# Complete IVR Backend WITHOUT needing ACS/Twilio account
 
-from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import logging
-from twilio.rest import Client
-from twilio.twiml.voice_response import VoiceResponse, Gather
+from typing import Optional, List
+from datetime import datetime
+import random
 
+app = FastAPI(title="IVR Simulator Backend", version="1.0.0")
 
-app = FastAPI(title="Air India IVR Backend")
-
-# ==============================================
-# Twilio Configuration
-# ==============================================
-TWILIO_ACCOUNT_SID =   "xxxxxxxxxxxxxx"
-TWILIO_AUTH_TOKEN = "your_auth_token_here"    #placeholder for security
-
-TWILIO_PHONE_NUMBER = "+12196005841"             
-
-twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-
-# ==============================================
-# Root Endpoint
-# ==============================================
-@app.get("/")
-def read_root() -> dict:
-    return {
-        "status": "IVR system is running",
-        "active_calls": 0,
-        "platform": "Twilio + FastAPI"
-    }
-
-# ==============================================
-# Basic Menus
-# ==============================================
-@app.get("/home")
-def first_home() -> dict:
-    return {
-        "message": "Welcome to Air India Customer Support IVR. "
-                   "Press 1 for Main Menu, Press 2 for Booking Menu."
-    }
-
-@app.get("/booking_menu")
-def booking_menu() -> dict:
-    return {
-        "menu": "Booking Menu",
-        "options": ["1. Domestic", "2. International"]
-    }
-
-@app.get("/status_menu")
-def status_menu() -> dict:
-    return {
-        "menu": "Status Menu",
-        "options": ["Enter the flight ID to check the status"]
-    }
-
-@app.get("/domestic_booking")
-def domestic_booking() -> dict:
-    return {"message": "Domestic booking flow started"}
-
-@app.get("/international_booking")
-def international_booking() -> dict:
-    return {"message": "International booking flow started"}
-
-
-class BookingMenu(BaseModel):
-    booking_id: str
-    trans_id: str
-    passenger_fullname: str
-    passenger_contact: str
-
-booking_db = []
-
-@app.post("/handle-key")
-def handle_key(Digits: str = "", menu: str = "main-menu") -> dict:
-    if menu == "main-menu":
-        if Digits == "1":
-            return booking_menu()
-        elif Digits == "2":
-            return status_menu()
-    elif menu == "booking-menu":
-        if Digits == "1":
-            return domestic_booking()
-        elif Digits == "2":
-            return international_booking()
-    raise HTTPException(status_code=400, detail="Invalid input")
-
-# ==============================================
-# Update Booking
-# ==============================================
-@app.put("/update_booking/{booking_id}")
-def update_booking(booking_id: str, details: BookingMenu) -> dict:
-    return {
-        "message": f"Booking {booking_id} updated successfully",
-        "data": details
-    }
-
-# ==============================================
-# Flight Info & Status
-# ==============================================
-flights = [
-    {"flight_id": "AI1", "origin": "Mumbai", "destination": "Chennai", "status": "Confirmed"},
-    {"flight_id": "AI2", "origin": "Chennai", "destination": "Kochi", "status": "Delayed"},
-    {"flight_id": "AI3", "origin": "Delhi", "destination": "Mumbai", "status": "Cancelled"},
-    {"flight_id": "AI4", "origin": "Kochi", "destination": "Bengaluru", "status": "Confirmed"},
-    {"flight_id": "AI5", "origin": "Hyderabad", "destination": "Goa", "status": "Delayed"}
-]
-
-@app.get("/flight/{flight_id}")
-def get_flight(flight_id: str) -> dict:
-    for f in flights:
-        if f["flight_id"] == flight_id:
-            return {"flight_id": flight_id, "status": f["status"]}
-    raise HTTPException(status_code=404, detail="Flight not found")
-
-@app.get("/status/{flight_id}")
-def get_flight_status(flight_id: str) -> dict:
-    for f in flights:
-        if f["flight_id"] == flight_id:
-            return {
-                "status": f["status"],
-                "origin": f["origin"],
-                "destination": f["destination"]
-            }
-    raise HTTPException(status_code=404, detail="Flight not found")
-
-@app.get("/active_flights")
-def active_flights() -> dict:
-    return {"active_flights": flights}
-
-# ==============================================
-# Cancel Booking
-# ==============================================
-@app.delete("/cancel_flight/{booking_id}")
-def cancel_booking(booking_id: str) -> dict:
-    for b in booking_db:
-        if b["booking_id"] == booking_id:
-            booking_db.remove(b)
-            return {"message": "Booking cancelled successfully"}
-    raise HTTPException(status_code=404, detail="Booking not found")
-
-# ==============================================
-# Error Handling and Logging
-# ==============================================
-logging.basicConfig(level=logging.INFO)
-
-@app.exception_handler(Exception)
-def handle_exceptions(request, exc):
-    logging.error(f"Error occurred: {exc}")
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
-
-# ==============================================
-# IVR Session Management
-# ==============================================
-call_sessions = {}
-
-@app.post("/ivr/step1")
-def step1(call_id: str, origin: str) -> dict:
-    call_sessions[call_id] = {"origin": origin}
-    return {"message": "Origin saved. Please provide destination."}
-
-@app.post("/ivr/step2")
-def step2(call_id: str, destination: str) -> dict:
-    session = call_sessions.get(call_id)
-    if not session:
-        raise HTTPException(status_code=400, detail="Session not found")
-
-    session["destination"] = destination
-    return {
-        "message": f"You are flying from {session['origin']} to {session['destination']}"
-    }
-
-@app.post("/twilio_ivr")
-async def twilio_ivr(request: Request):
-    """Handle incoming calls from Twilio"""
-    response = VoiceResponse()
-    gather = Gather(num_digits=1, action="/twilio_process_choice", method="POST")
-    gather.say("Welcome to Air India IVR. Press 1 for flight status, 2 for booking.", voice="Polly.Aditi")
-    response.append(gather)
-    response.redirect("/twilio_ivr")
-    return Response(content=str(response), media_type="application/xml")
-
-@app.post("/twilio_process_choice")
-async def twilio_process_choice(request: Request):
-    form = await request.form()
-    digits = form.get("Digits")
-    response = VoiceResponse()
-    if digits == "1":
-        response.say("Your flight AI 202 from Delhi to Mumbai is on time.")
-    elif digits == "2":
-        response.say("Please visit Air India dot com to book tickets.")
-    else:
-        response.say("Invalid choice. Redirecting to main menu.")
-        response.redirect("/twilio_ivr")
-    return Response(content=str(response), media_type="application/xml")
-
-
-"""
-from azure.communication.callautomation import (
-    CallAutomationClient,
-    RecognizeInputType,
-    RecognizeDtmfOptions,
-    DtmfTone,
-    TextSource
+# Enable CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-from azure.core.credentials import AzureKeyCredential
 
-ACS_CONNECTION_STRING = " "
-ACS_PHONE_NUMBER = "+1234567890"
-CALLBACK_URI = " "
+# ==================== DATA MODELS ====================
 
-call_automation_client = CallAutomationClient.from_connection_string(ACS_CONNECTION_STRING)
+class CallStart(BaseModel):
+    caller_number: str
+    call_id: Optional[str] = None
+
+class DTMFInput(BaseModel):
+    call_id: str
+    digit: str
+    current_menu: str
+
+class CallLog(BaseModel):
+    call_id: str
+    caller_number: str
+    start_time: str
+    end_time: Optional[str] = None
+    duration: Optional[int] = None
+    menu_path: List[str] = []
+    inputs: List[str] = []
+
+# ==================== IN-MEMORY STORAGE ====================
+
+# Active calls
 active_calls = {}
 
-def create_voice_prompt(text: str):
-    return TextSource(text=text, voice_name="en-IN-NeerjaNeural")
-"""
+# Call history
+call_history = []
+
+# Menu definitions
+MENU_STRUCTURE = {
+    "main": {
+        "prompt": "Welcome to Air India Airlines. Press 1 for Booking Enquiry. Press 2 for Flight Status. Press 9 to speak with an agent.",
+        "options": {
+            "1": {"action": "goto_menu", "target": "booking", "message": "You selected Booking Enquiry."},
+            "2": {"action": "goto_menu", "target": "flight_status", "message": "You selected Flight Status."},
+            "9": {"action": "transfer_agent", "message": "Transferring to agent."}
+        }
+    },
+    "booking": {
+        "prompt": "Press 1 for Domestic Flights. Press 2 for International Flights. Press 0 to go back.",
+        "options": {
+            "1": {"action": "end_call", "message": "Domestic booking selected. We'll call you back."},
+            "2": {"action": "end_call", "message": "International booking. Visit airindia.com."},
+            "0": {"action": "goto_menu", "target": "main", "message": "Going back to main menu."}
+        }
+    },
+    "flight_status": {
+        "prompt": "Please enter your 6-digit PNR number followed by hash.",
+        "options": {
+            "#": {"action": "lookup_pnr", "message": "Looking up your PNR..."}
+        }
+    }
+}
+
+# ==================== ENDPOINTS ====================
+
+@app.get("/")
+def root():
+    """Health check"""
+    return {
+        "status": "IVR Simulator Running",
+        "active_calls": len(active_calls),
+        "total_calls": len(call_history)
+    }
+
+@app.post("/ivr/start")
+def start_call(call_data: CallStart):
+    """
+    Simulate incoming call
+    
+    This would be triggered by ACS/Twilio in real system
+    Here we simulate it with web interface
+    """
+    
+    call_id = f"CALL_{random.randint(100000, 999999)}"
+    
+    # Create call session
+    active_calls[call_id] = {
+        "call_id": call_id,
+        "caller_number": call_data.caller_number,
+        "start_time": datetime.now().isoformat(),
+        "current_menu": "main",
+        "menu_path": ["main"],
+        "inputs": [],
+        "pnr_buffer": ""
+    }
+    
+    print(f"\n📞 NEW CALL: {call_id} from {call_data.caller_number}")
+    
+    # Return welcome message
+    return {
+        "call_id": call_id,
+        "status": "connected",
+        "prompt": MENU_STRUCTURE["main"]["prompt"]
+    }
+
+@app.post("/ivr/dtmf")
+def handle_dtmf(input_data: DTMFInput):
+    """
+    Process DTMF key press
+    
+    This is the core IVR logic - same as ACS/Twilio would do
+    """
+    
+    call_id = input_data.call_id
+    digit = input_data.digit
+    
+    # Check if call exists
+    if call_id not in active_calls:
+        raise HTTPException(status_code=404, detail="Call not found")
+    
+    call = active_calls[call_id]
+    current_menu = call["current_menu"]
+    
+    # Log input
+    call["inputs"].append(digit)
+    
+    print(f"\n🔢 DTMF INPUT: Call {call_id}, Menu: {current_menu}, Digit: {digit}")
+    
+    # Get menu definition
+    menu = MENU_STRUCTURE.get(current_menu)
+    if not menu:
+        return {"error": "Invalid menu state"}
+    
+    # Special handling for PNR input
+    if current_menu == "flight_status" and digit != "#":
+        call["pnr_buffer"] += digit
+        if len(call["pnr_buffer"]) < 6:
+            return {
+                "status": "collecting",
+                "prompt": f"You entered {digit}. Continue entering PNR.",
+                "collected": call["pnr_buffer"]
+            }
+    
+    # Check if digit is valid option
+    if digit not in menu["options"]:
+        return {
+            "status": "invalid",
+            "prompt": "Invalid option. Please try again.",
+            "current_menu": current_menu,
+            "valid_options": list(menu["options"].keys())
+        }
+    
+    # Get action for this option
+    option = menu["options"][digit]
+    action = option["action"]
+    message = option["message"]
+    
+    response = {
+        "status": "processed",
+        "message": message
+    }
+    
+    # Execute action
+    if action == "goto_menu":
+        target_menu = option["target"]
+        call["current_menu"] = target_menu
+        call["menu_path"].append(target_menu)
+        response["current_menu"] = target_menu
+        response["prompt"] = MENU_STRUCTURE[target_menu]["prompt"]
+        
+    elif action == "end_call":
+        response["status"] = "call_ended"
+        response["call_action"] = "hangup"
+        # Move call to history
+        call["end_time"] = datetime.now().isoformat()
+        call_history.append(call.copy())
+        del active_calls[call_id]
+        
+    elif action == "transfer_agent":
+        response["status"] = "transferring"
+        response["call_action"] = "transfer"
+        call["end_time"] = datetime.now().isoformat()
+        call_history.append(call.copy())
+        del active_calls[call_id]
+        
+    elif action == "lookup_pnr":
+        pnr = call["pnr_buffer"]
+        if len(pnr) == 6:
+            # Mock PNR lookup
+            response["status"] = "pnr_found"
+            response["pnr_info"] = {
+                "pnr": pnr,
+                "flight": "AI101",
+                "status": "Confirmed",
+                "route": "Mumbai to Delhi"
+            }
+            response["message"] = f"Your PNR {pnr} is confirmed. Flight AI101 from Mumbai to Delhi."
+            response["call_action"] = "hangup"
+            call["end_time"] = datetime.now().isoformat()
+            call_history.append(call.copy())
+            del active_calls[call_id]
+        else:
+            response["status"] = "invalid_pnr"
+            response["message"] = "Invalid PNR. Please try again."
+            call["pnr_buffer"] = ""
+    
+    print(f"✅ ACTION: {action} - {message}")
+    
+    return response
+
+@app.post("/ivr/end")
+def end_call(call_id: str):
+    """End call (user hung up)"""
