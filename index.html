@@ -83,14 +83,14 @@
 
         if (data.status === "queued" || data.status === "in-progress") {
           document.getElementById("log").innerText = 
-            `✅ Call initiated!\nFrom: ${data.from}\nTo: ${data.to}\nCall SID: ${data.sid}`;
+            ` Call initiated!\nFrom: ${data.from}\nTo: ${data.to}\nCall SID: ${data.sid}`;
         } else {
           document.getElementById("log").innerText =
-            "❌ Failed to start call: " + JSON.stringify(data, null, 2);
+            "Failed to start call: " + JSON.stringify(data, null, 2);
         }
       } catch (err) {
         console.error(err);
-        document.getElementById("log").innerText = "❌ Error: " + err.message;
+        document.getElementById("log").innerText = " Error: " + err.message;
       }
     };
   </script>
